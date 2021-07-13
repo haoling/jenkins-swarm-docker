@@ -1,4 +1,4 @@
-FROM blacklabelops/jenkins-swarm
+FROM haoling/jenkins-swarm:3.27
 MAINTAINER Steffen Bleul <sbl@blacklabelops.com>
 
 # Need root to build image
@@ -6,7 +6,6 @@ USER root
 
 # Add ssl certificates
 COPY www.docker.com.crt /etc/pki/ca-trust/source/anchors/
-COPY www.digicert.com.pem /home/jenkins/
 
 # install web tools
 RUN yum install -y epel-release && \
@@ -16,10 +15,10 @@ RUN yum install -y epel-release && \
     gzip \
     tar \
     curl \
-    python-pip \
     wget && \
-    yum clean all && rm -rf /var/cache/yum/* && \
-    pip install --upgrade pip
+    yum clean all && rm -rf /var/cache/yum/*
+RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python - &&\
+    python -m pip install --upgrade "pip < 21.0"
 
 # install Docker cli
 ENV DOCKER_VERSION 1.12.1
@@ -29,7 +28,7 @@ RUN curl -fSL "https://get.docker.com/builds/Linux/x86_64/docker-${DOCKER_VERSIO
     tar -xzvf /tmp/docker.tgz && \
     mv docker/* /usr/local/bin/ && \
     chmod +x /usr/local/bin/docker && \
-    pip install --cert /home/jenkins/www.digicert.com.pem docker-compose && \
+    pip install docker-compose && \
     rm -rf /var/log/* && rm -rf /tmp/*
 
 # Switch back to user jenkins
