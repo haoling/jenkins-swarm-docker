@@ -21,13 +21,10 @@ RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python - &&\
     python -m pip install --upgrade "pip < 21.0"
 
 # install Docker cli
-ENV DOCKER_VERSION 1.12.1
+ENV DOCKER_VERSION 20.10.11
 ENV DOCKER_HOST tcp://docker:2375
 
-RUN curl -fSL "https://get.docker.com/builds/Linux/x86_64/docker-${DOCKER_VERSION}.tgz" -o /tmp/docker.tgz && \
-    tar -xzvf /tmp/docker.tgz && \
-    mv docker/* /usr/local/bin/ && \
-    chmod +x /usr/local/bin/docker && \
+RUN curl -fsSL https://get.docker.com | VERSION=${DOCKER_VERSION} sh - && \
     pip install docker-compose && \
     rm -rf /var/log/* && rm -rf /tmp/*
 
