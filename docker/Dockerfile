@@ -1,38 +1,46 @@
-FROM haoling/jenkins-swarm:3.27
-MAINTAINER Steffen Bleul <sbl@blacklabelops.com>
+FROM openjdk:19-alpine3.16
 
-# Need root to build image
-USER root
+# gosu
+ARG GOSU_VERSION=1.12
+RUN wget https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64 -O /bin/gosu \
+    && chmod +x /bin/gosu
 
-# Add ssl certificates
-COPY www.docker.com.crt /etc/pki/ca-trust/source/anchors/
+# git
+RUN apk add --no-cache git shadow bash \
+    && adduser -h /home/jenkins -u 1000 -D jenkins
 
-# install web tools
-RUN yum install -y epel-release && \
-    yum install -y \
-    unzip \
-    zip \
-    gzip \
-    tar \
-    curl \
-    wget && \
-    yum clean all && rm -rf /var/cache/yum/*
-RUN curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python - &&\
-    python -m pip install --upgrade "pip < 21.0"
+# Jenkins Swarm plugins
+ARG JENKINS_SWARM_VERSION=3.36
+RUN wget https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/swarm-client/${JENKINS_SWARM_VERSION}/swarm-client-${JENKINS_SWARM_VERSION}.jar -O /usr/local/bin/swarm-client.jar \
+    && chmod +x /usr/local/bin/swarm-client.jar
 
-# install Docker cli
-ENV DOCKER_VERSION 1.12.1
-ENV DOCKER_HOST tcp://docker:2375
+# Docker
+ARG DOCKER_VERSION=19.03.15
+RUN wget -O /tmp/docker.tgz https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz \
+    && tar --strip-components=1 -xzf /tmp/docker.tgz -C /usr/local/bin docker/docker \
+    && rm -rf /tmp/docker.tgz
 
-RUN curl -fSL "https://get.docker.com/builds/Linux/x86_64/docker-${DOCKER_VERSION}.tgz" -o /tmp/docker.tgz && \
-    tar -xzvf /tmp/docker.tgz && \
-    mv docker/* /usr/local/bin/ && \
-    chmod +x /usr/local/bin/docker && \
-    pip install docker-compose && \
-    rm -rf /var/log/* && rm -rf /tmp/*
+# Kubectl
+ARG KUBECTL_VERSION=1.20.2
+RUN wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl \
+    && chmod +x /usr/local/bin/kubectl
 
-# Switch back to user jenkins
-USER $CONTAINER_UID
-COPY docker-entrypoint.sh /home/jenkins/entrypoint.sh
-ENTRYPOINT ["/home/jenkins/entrypoint.sh"]
-CMD ["swarm"]
+# helm
+ARG HELM_VERSION=3.3.4
+RUN wget -O /tmp/helm.tar.gz https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz \
+    && tar --strip-components=1 -xzf /tmp/helm.tar.gz -C /usr/local/bin linux-amd64/helm \
+    && rm -rf /tmp/helm.tar.gz
+
+ARG DOCKER_COMPOSE_VERSION=1.28.5
+RUN wget -O /usr/local/bin/docker-compose https://github.com/docker/compose/releases/download/1.27.4/docker-compose-Linux-x86_64 \
+    && chmod +x /usr/local/bin/docker-compose
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+
+WORKDIR /home/jenkins
+
+ENV PROMETHEUS_PORT -1
+ENV LABELS swarm
+ENV DOCKER_SOCK /var/run/docker.sock
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["sh", "-c", "java $JAVA_OPTS -jar /usr/local/bin/swarm-client.jar -name $AGENT_NAME -master $JENKINS_MASTER -username $JENKINS_USER -password $JENKINS_PASS -executors $JENKINS_EXECUTORS $JENKINS_OPTS -labels $LABELS"]
